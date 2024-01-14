@@ -22,7 +22,7 @@ local function handleTreeViewChildrenResults(result, state)
         table.insert(new_nodes, utils.convert_node(node))
     end
     local root = {
-        id = "1",
+        id = "0",
         name = "metals tvp",
         type = "root",
         children = new_nodes,
@@ -38,25 +38,38 @@ end
 
 ---Navigate to the given path.
 ---@param path string Path to navigate to. If empty, will navigate to the cwd.
-M.navigate = function(state, path)
+M.navigate = function(state, target_node)
     state.lsp_winid, _ = neotree_utils.get_appropriate_window(state)
     state.lsp_bufnr = vim.api.nvim_win_get_buf(state.lsp_winid)
     state.path = vim.api.nvim_buf_get_name(state.lsp_bufnr)
 
-    local opts = {}
-    local tree_view_children_params = { viewId = utils.metals_packages }
-    if opts.parent_uri ~= nil then
-        tree_view_children_params["nodeUri"] = opts.parent_uri
+    local tree = state.tree
+    if not tree or not renderer.window_exists(state) then
+        vim.notify("get nodes !!")
+        local opts = {}
+        local tree_view_children_params = { viewId = utils.metals_packages }
+        if opts.parent_uri ~= nil then
+            tree_view_children_params["nodeUri"] = opts.parent_uri
+        end
+        vim.lsp.buf_request(utils.valid_metals_buffer(), "metals/treeViewChildren", tree_view_children_params,
+            function(err, result)
+                if err then
+                    log.error(err)
+                    log.error("Something went wrong while requesting tvp children. More info in logs.")
+                else
+                    handleTreeViewChildrenResults(result, state)
+                end
+            end)
+    else
+        target_node = target_node or tree and tree:get_node()
+        if target_node then
+            vim.notify("redraw !!")
+            renderer.redraw(state)
+        else
+            vim.notify("show nodes !!")
+            renderer.show_nodes(tree:get_node("0"), state)
+        end
     end
-    vim.lsp.buf_request(utils.valid_metals_buffer(), "metals/treeViewChildren", tree_view_children_params,
-        function(err, result)
-            if err then
-                log.error(err)
-                log.error("Something went wrong while requesting tvp children. More info in logs.")
-            else
-                handleTreeViewChildrenResults(result, state)
-            end
-        end)
 end
 
 
