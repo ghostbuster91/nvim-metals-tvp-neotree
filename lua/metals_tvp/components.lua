@@ -43,7 +43,6 @@ M.icon = function(config, node, state)
     }
 end
 
-
 M.kind_icon = M.icon
 
 M.name = function(config, node, state)
@@ -60,12 +59,11 @@ M.name = function(config, node, state)
     }
 end
 
-
 M.kind_name = function(config, node, state)
-  return {
-    text = node:get_depth() == 1 and "" or node.extra.kind.name,
-    highlight = node.extra and node.extra.kind.hl or highlights.FILE_NAME,
-  }
+    return {
+        text = node:get_depth() == 1 and "" or node.extra.kind.name,
+        highlight = node.extra and node.extra.kind.hl or highlights.FILE_NAME,
+    }
 end
 
 return vim.tbl_deep_extend("force", common, M)

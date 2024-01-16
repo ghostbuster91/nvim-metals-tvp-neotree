@@ -1,15 +1,7 @@
 local kinds = require("neo-tree.sources.document_symbols.lib.kinds")
+local async = require("plenary.async")
 
 local api = vim.api
-
-local metals_state = {
-    -- NOTE: this is a bit of a hack since once we create the tvp panel, we can
-    -- no longer use 0 as the buffer to send the requests so we store a valid
-    -- buffer that Metals is attatched to. It doesn't really matter _what's_ in
-    -- that buffer, as long as Metals is attatched.
-    attatched_bufnr = nil,
-    tvp_tree = nil,
-}
 
 local M = {}
 
@@ -30,22 +22,25 @@ M.find_metals_buffer = function()
     return metals_buf
 end
 
-M.valid_metals_buffer = function()
-    if metals_state.attatched_bufnr ~= nil and api.nvim_buf_is_loaded(metals_state.attatched_bufnr) then
-        return metals_state.attatched_bufnr
+-- NOTE: this is a bit of a hack since once we create the tvp panel, we can
+-- no longer use 0 as the buffer to send the requests so we store a valid
+-- buffer that Metals is attatched to. It doesn't really matter _what's_ in
+-- that buffer, as long as Metals is attatched.
+---@return integer|nil
+M.valid_metals_buffer = function(state)
+    if state.metals_buffer ~= nil and api.nvim_buf_is_loaded(state.metals_buffer) then
+        return state.metals_buffer
     else
         local valid_buf = M.find_metals_buffer()
-        metals_state.attatched_bufnr = valid_buf
+        state.metals_buffer = valid_buf
         return valid_buf
     end
 end
-
 
 M.collapse_state = {
     expanded = "expanded",
     collapsed = "collapsed",
 }
-
 
 M.metals_packages = "metalsPackages"
 
@@ -80,10 +75,14 @@ end
 M.log = {
     error = function(msg)
         vim.notify("error: " .. vim.inspect(msg), vim.log.levels.ERROR, { title = "kasper" })
-    end
+    end,
 }
 
-
 M.SOURCE_NAME = "metals_tvp"
+
+M.async_void_run = function(wrapped)
+    local empty_callback = function() end
+    async.run(wrapped, empty_callback)
+end
 
 return M
