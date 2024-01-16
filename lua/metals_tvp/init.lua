@@ -6,6 +6,7 @@ local renderer = require("neo-tree.ui.renderer")
 local utils = require("metals_tvp.utils")
 local neotree_utils = require("neo-tree.utils")
 local log = utils.log
+local async = require("plenary.async")
 local SOURCE_NAME = utils.SOURCE_NAME
 
 local M = {
@@ -36,6 +37,13 @@ local function handleTreeViewChildrenResults(result, state)
     renderer.show_nodes({ root }, state)
 end
 
+
+local async_void_run = function(wrapped)
+    local empty_callback = function()
+    end
+    async.run(wrapped, empty_callback)
+end
+
 ---Navigate to the given path.
 ---@param path string Path to navigate to. If empty, will navigate to the cwd.
 M.navigate = function(state, target_node)
@@ -44,36 +52,25 @@ M.navigate = function(state, target_node)
     state.path = vim.api.nvim_buf_get_name(state.lsp_bufnr)
 
     local tree = state.tree
-    if tree then
-        if not renderer.window_exists(state) then
-            renderer.acquire_window(state)
-            vim.notify(vim.inspect(tree))
-            renderer.redraw(state)
-        else
-            target_node = target_node or tree and tree:get_node()
-            if target_node then
-                vim.notify("redraw !!")
-                renderer.redraw(state)
-            else
-                vim.notify("show nodes !!")
-                renderer.show_nodes(tree:get_node("0"), state)
+    if not tree then
+        async_void_run(function()
+            local opts = {}
+            local tree_view_children_params = { viewId = utils.metals_packages }
+            if opts.parent_uri ~= nil then
+                tree_view_children_params["nodeUri"] = opts.parent_uri
             end
-        end
-    else
-        local opts = {}
-        local tree_view_children_params = { viewId = utils.metals_packages }
-        if opts.parent_uri ~= nil then
-            tree_view_children_params["nodeUri"] = opts.parent_uri
-        end
-        vim.lsp.buf_request(utils.valid_metals_buffer(), "metals/treeViewChildren", tree_view_children_params,
-            function(err, result)
-                if err then
-                    log.error(err)
-                    log.error("Something went wrong while requesting tvp children. More info in logs.")
-                else
-                    handleTreeViewChildrenResults(result, state)
-                end
-            end)
+            local wrapped = async.wrap(vim.lsp.buf_request, 4)
+            local err, result = wrapped(utils.valid_metals_buffer(), "metals/treeViewChildren", tree_view_children_params)
+            if err then
+                log.error(err)
+                log.error("Something went wrong while requesting tvp children. More info in logs.")
+            else
+                handleTreeViewChildrenResults(result, state)
+            end
+        end)
+    elseif not renderer.window_exists(state) then
+        renderer.acquire_window(state)
+        renderer.redraw(state)
     end
 end
 
