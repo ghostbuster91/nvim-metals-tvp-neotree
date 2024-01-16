@@ -5,6 +5,7 @@ local api = vim.api
 
 local M = {}
 
+-- taken from https://github.com/scalameta/nvim-metals/blob/c905fff8d510447545163a5dff9d564d09e97bd8/lua/metals/util.lua#L102
 ---@return integer|nil
 M.find_metals_buffer = function()
     local metals_buf = nil
@@ -37,12 +38,10 @@ M.valid_metals_buffer = function(state)
     end
 end
 
-M.collapse_state = {
+local collapse_state = {
     expanded = "expanded",
     collapsed = "collapsed",
 }
-
-M.metals_packages = "metalsPackages"
 
 M.convert_node = function(raw_node)
     local node = {}
@@ -54,7 +53,7 @@ M.convert_node = function(raw_node)
         icon = "",
     }
     if raw_node.collapseState ~= nil then
-        node._is_expanded = raw_node.collapseState == M.collapse_state.expanded
+        node._is_expanded = raw_node.collapseState == collapse_state.expanded
         node.extra.is_expandable = true
     end
     if raw_node.icon ~= nil then

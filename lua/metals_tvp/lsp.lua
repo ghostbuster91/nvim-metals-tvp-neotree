@@ -3,6 +3,7 @@ local utils = require("metals_tvp.utils")
 
 local M = {}
 
+local metals_packages = "metalsPackages"
 local async_buf_request = async.wrap(vim.lsp.buf_request, 4)
 
 -- [async] Get children for a given parent
@@ -13,7 +14,7 @@ M.tree_view_children = function(bufnr, node_uri)
 end
 
 M.make_tree_view_children_params = function(node_uri)
-    return { viewId = utils.metals_packages, nodeUri = node_uri }
+    return { viewId = metals_packages, nodeUri = node_uri }
 end
 
 -- Notify the server that the collapse stated for a node has changed
@@ -21,7 +22,7 @@ end
 -- @param collapsed (boolean)
 M.tree_view_node_collapse_did_change = function(bufnr, node_uri, collapsed)
     -- view_id (string) the view id that contains the node
-    local view_id = utils.metals_packages
+    local view_id = metals_packages
     vim.lsp.buf_notify(
         bufnr,
         "metals/treeViewNodeCollapseDidChange",
