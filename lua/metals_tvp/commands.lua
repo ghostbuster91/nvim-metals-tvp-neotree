@@ -14,7 +14,7 @@ M.redraw = neotree_utils.wrap(manager.redraw, SOURCE_NAME)
 -- M.open = M.toggle_node
 
 M.show_debug_info = function(state)
-    print(vim.inspect(state))
+    print(vim.inspect(state.tree))
 end
 
 

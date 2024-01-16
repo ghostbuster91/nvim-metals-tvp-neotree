@@ -44,8 +44,22 @@ M.navigate = function(state, target_node)
     state.path = vim.api.nvim_buf_get_name(state.lsp_bufnr)
 
     local tree = state.tree
-    if not tree or not renderer.window_exists(state) then
-        vim.notify("get nodes !!")
+    if tree then
+        if not renderer.window_exists(state) then
+            renderer.acquire_window(state)
+            vim.notify(vim.inspect(tree))
+            renderer.redraw(state)
+        else
+            target_node = target_node or tree and tree:get_node()
+            if target_node then
+                vim.notify("redraw !!")
+                renderer.redraw(state)
+            else
+                vim.notify("show nodes !!")
+                renderer.show_nodes(tree:get_node("0"), state)
+            end
+        end
+    else
         local opts = {}
         local tree_view_children_params = { viewId = utils.metals_packages }
         if opts.parent_uri ~= nil then
@@ -60,15 +74,6 @@ M.navigate = function(state, target_node)
                     handleTreeViewChildrenResults(result, state)
                 end
             end)
-    else
-        target_node = target_node or tree and tree:get_node()
-        if target_node then
-            vim.notify("redraw !!")
-            renderer.redraw(state)
-        else
-            vim.notify("show nodes !!")
-            renderer.show_nodes(tree:get_node("0"), state)
-        end
     end
 end
 
