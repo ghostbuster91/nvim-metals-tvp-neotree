@@ -1,15 +1,16 @@
 local async = require("plenary.async")
-local utils = require("metals_tvp.utils")
+local log = require("metals_tvp.logger")
 
 local M = {}
 
 local metals_packages = "metalsPackages"
-local async_buf_request = async.wrap(vim.lsp.buf_request, 4)
+M.metals_packages = metals_packages
 
 -- [async] Get children for a given parent
 -- @param view_id (string) the view id that contains the node
 -- @param node_uri (string) parent id
 M.tree_view_children = function(bufnr, node_uri)
+    local async_buf_request = async.wrap(vim.lsp.buf_request, 4)
     return async_buf_request(bufnr, "metals/treeViewChildren", M.make_tree_view_children_params(node_uri))
 end
 
@@ -36,7 +37,7 @@ M.execute_command = function(bufnr, node)
         arguments = node.extra.command.arguments,
     }, function(err, _, _)
         if err then
-            utils.log.error("Unable to execute node command.")
+            log.error("Unable to execute node command.")
         end
     end)
 end

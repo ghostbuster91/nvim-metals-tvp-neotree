@@ -1,6 +1,7 @@
 local kinds = require("neo-tree.sources.document_symbols.lib.kinds")
 local async = require("plenary.async")
-
+local lsp = require("metals_tvp.lsp")
+local log = require("metals_tvp.logger")
 local api = vim.api
 
 local M = {}
@@ -71,17 +72,40 @@ M.convert_node = function(raw_node)
     return node
 end
 
-M.log = {
-    error = function(msg)
-        vim.notify("error: " .. vim.inspect(msg), vim.log.levels.ERROR, { title = "kasper" })
-    end,
-}
-
 M.SOURCE_NAME = "metals_tvp"
 
 M.async_void_run = function(wrapped)
     local empty_callback = function() end
     async.run(wrapped, empty_callback)
+end
+
+M.fetch_recursively_expanded_nodes = function(result, state)
+    local new_nodes = {}
+    for _, tvp_node in pairs(result.nodes) do
+        table.insert(new_nodes, M.convert_node(tvp_node))
+    end
+
+    local tasks = {}
+    for _, cnode in pairs(new_nodes) do
+        if cnode._is_expanded then
+            local prepared = function()
+                local err, cresult = lsp.tree_view_children(state.metals_buffer, cnode.id)
+
+                if err then
+                    log.error(err)
+                    log.error("Something went wrong while requesting tvp children. More info in logs.")
+                else
+                    cnode.children = M.fetch_recursively_expanded_nodes(cresult, state)
+                end
+            end
+            table.insert(tasks, prepared)
+        end
+    end
+
+    if #tasks > 0 then
+        async.util.join(tasks)
+    end
+    return new_nodes
 end
 
 return M
