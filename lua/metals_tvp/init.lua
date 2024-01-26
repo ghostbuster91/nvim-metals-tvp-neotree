@@ -23,29 +23,15 @@ local M = {
     display_name = "Metals TVP",
 }
 
-local function render_root_node(state, children)
-    local root = {
-        id = "0",
-        name = "metals tvp",
-        type = "root",
-        children = children,
-        extra = {
-            kind = {
-                icon = "",
-            },
-        },
-    }
-
-    renderer.show_nodes({ root }, state)
-end
-
 ---Navigate to the given path.
 ---@param path string Path to navigate to. If empty, will navigate to the cwd.
 M.navigate = function(state, target_node)
-    state.lsp_winid, _ = neotree_utils.get_appropriate_window(state)
-    state.lsp_bufnr = vim.api.nvim_win_get_buf(state.lsp_winid)
-    state.path = vim.api.nvim_buf_get_name(state.lsp_bufnr)
+    state.lsp_winid, _  = neotree_utils.get_appropriate_window(state)
+    state.lsp_bufnr     = vim.api.nvim_win_get_buf(state.lsp_winid)
+    state.path          = vim.api.nvim_buf_get_name(state.lsp_bufnr)
     state.metals_buffer = utils.valid_metals_buffer(state)
+
+    utils.debug(state)
 
     local tree = state.tree
     if not tree then
@@ -63,9 +49,8 @@ M.navigate = function(state, target_node)
                 },
             }, state)
         end
-    elseif not renderer.window_exists(state) then
-        renderer.acquire_window(state)
-        renderer.redraw(state)
+    else
+        renderer.show_nodes(utils.tree_to_nui(utils.create_root()), state)
     end
 end
 
@@ -74,6 +59,7 @@ end
 --wants to change from the defaults. May be empty to accept default values.
 M.setup = function(config, global_config)
     events.define_event(api.TREE_VIEW_DID_CHANGE_EVENT, { debounce_frequency = 0 })
+    utils.append_state(utils.create_root())
 
     manager.subscribe(SOURCE_NAME, {
         event = api.TREE_VIEW_DID_CHANGE_EVENT,
@@ -85,18 +71,18 @@ M.setup = function(config, global_config)
                 return
             end
             state.metals_buffer = utils.valid_metals_buffer(state)
-            -- if state.tree == nil then
-            --     render_root_node(state, {})
-            --     return
-            -- end
+            vim.notify("state load")
+
             local refresh_node = function(node)
+                vim.notify("refresh node")
                 local err, result = lsp.tree_view_children(state.metals_buffer, node.nodeUri)
                 if err then
                     log.error(err)
                     log.error("Something went wrong while requesting tvp children. More info in logs.")
                 else
                     local children = utils.fetch_recursively_expanded_nodes(result, state)
-                    renderer.show_nodes(children, state, node.nodeUri)
+                    utils.append_state(children)
+                    renderer.show_nodes(utils.tree_to_nui(node), state, node.nodeUri)
                 end
             end
             local tasks = {}
@@ -113,19 +99,19 @@ M.setup = function(config, global_config)
             end
             utils.async_void_run(function()
                 if #tasks > 0 then
+                    vim.notify("async tasks > 0")
                     async.util.join(tasks)
                 else
+                    vim.notify("render root")
                     --TODO kind of hacky
                     local err, result = lsp.tree_view_children(state.metals_buffer, nil)
                     if err then
                         log.error(err)
                         log.error("Something went wrong while requesting tvp children. More info in logs.")
                     else
-                        local new_nodes = {}
-                        for _, node in pairs(result.nodes) do
-                            table.insert(new_nodes, utils.convert_node(node))
-                        end
-                        render_root_node(state, new_nodes)
+                        utils.append_state(result.nodes)
+                        local tree = utils.tree_to_nui(utils.create_root())
+                        renderer.show_nodes({ tree }, state)
                     end
                 end
             end)

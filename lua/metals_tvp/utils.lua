@@ -3,6 +3,7 @@ local async = require("plenary.async")
 local lsp = require("metals_tvp.lsp")
 local log = require("metals_tvp.logger")
 local api = vim.api
+local renderer = require("neo-tree.ui.renderer")
 
 local M = {}
 
@@ -63,7 +64,9 @@ M.convert_node = function(raw_node)
     if raw_node.command ~= nil then
         node.extra.command = raw_node.command
     end
-    if raw_node.icon then
+    if raw_node.type then
+        node.type = raw_node.type
+    elseif raw_node.icon then
         node.type = "symbol"
         node.extra.kind.name = raw_node.icon
     else
@@ -80,22 +83,20 @@ M.async_void_run = function(wrapped)
 end
 
 M.fetch_recursively_expanded_nodes = function(result, state)
-    local new_nodes = {}
-    for _, tvp_node in pairs(result.nodes) do
-        table.insert(new_nodes, M.convert_node(tvp_node))
-    end
+    local new_nodes = result.nodes
 
     local tasks = {}
     for _, cnode in pairs(new_nodes) do
-        if cnode._is_expanded then
+        if cnode.collapseState == collapse_state.expanded then
             local prepared = function()
                 local err, cresult = lsp.tree_view_children(state.metals_buffer, cnode.id)
 
                 if err then
                     log.error(err)
                     log.error("Something went wrong while requesting tvp children. More info in logs.")
+                    return {}
                 else
-                    cnode.children = M.fetch_recursively_expanded_nodes(cresult, state)
+                    return M.fetch_recursively_expanded_nodes(cresult, state)
                 end
             end
             table.insert(tasks, prepared)
@@ -103,9 +104,61 @@ M.fetch_recursively_expanded_nodes = function(result, state)
     end
 
     if #tasks > 0 then
-        async.util.join(tasks)
+        local rec_nodes = async.util.join(tasks)
+        for _, node in ipairs(rec_nodes) do
+            table.insert(new_nodes, node)
+        end
     end
     return new_nodes
+end
+
+M.debug = function(state)
+    local window_exists = renderer.window_exists(state)
+    local tree_visible  = renderer.tree_is_visible(state)
+    local tree_not_null = state.tree ~= nil
+
+    vim.notify([[tree state:
+    window_exists: ]] .. vim.inspect(window_exists) .. [[
+    tree_visible: ]] .. vim.inspect(tree_visible) .. [[
+    tree_not_null: ]] .. vim.inspect(tree_not_null))
+end
+
+
+M.root_node_id = "0"
+
+M.internal_state = {
+    nodes = {},
+}
+-- todo we always append, when should we remove?
+M.append_state = function(tvp_nodes)
+    for _, node in ipairs(tvp_nodes) do
+        local prev = M.internal_state.nodes[node.parent_id or M.root_node_id] or {}
+        table.insert(prev, node)
+        M.internal_state.nodes[node.parent_id or M.root_node_id] = prev
+    end
+end
+
+M.create_root = function()
+    local root = {
+        nodeUri = M.root_node_id,
+        label = "metals tvp",
+        type = "root",
+        collapseState = "expanded"
+    }
+
+    return root
+end
+
+M.tree_to_nui = function(tvp_node)
+    local nui_node = M.convert_node(tvp_node)
+    local children = M.internal_state.nodes[tvp_node.nodeUri] or {}
+
+    local child_nui_node = {}
+    for _, node in ipairs(children) do
+        table.insert(child_nui_node, M.tree_to_nui(node))
+    end
+    nui_node.children = child_nui_node
+    return nui_node
 end
 
 return M

@@ -11,7 +11,13 @@ M.metals_packages = metals_packages
 -- @param node_uri (string) parent id
 M.tree_view_children = function(bufnr, node_uri)
     local async_buf_request = async.wrap(vim.lsp.buf_request, 4)
-    return async_buf_request(bufnr, "metals/treeViewChildren", M.make_tree_view_children_params(node_uri))
+    local err, result = async_buf_request(bufnr, "metals/treeViewChildren", M.make_tree_view_children_params(node_uri))
+    if result ~= nil then
+        for _, node in ipairs(result.nodes) do
+            node.parent_id = node_uri
+        end
+    end
+    return err, result
 end
 
 M.make_tree_view_children_params = function(node_uri)
