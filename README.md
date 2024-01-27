@@ -30,7 +30,7 @@ Other neotree benefits:
 Known issues:
 
 - Modules have to be compiled first otherwise you will get no results.
-  Toggling an uncompiled module triggers the compilation, but results are not reported.
+  Toggling a non-compiled module triggers the compilation, but results are not reported.
   Once the module was compiled, toggling it once again should work.
   This does not work on metals 1.2.0. See [#6023](https://github.com/scalameta/metals/issues/6029) for details.
 
@@ -79,3 +79,14 @@ metals_config.handlers = {
         end
     }
 ```
+
+## Developer notes
+
+What to test:
+
+- open source before it is loaded
+- open source once loaded -> libraries -> expand/collapse nodes
+- jumping between metals-tvp and another buffer (make sure that we don't request any new data)
+- follow_cursor both library and project
+- make sure that non-compiled modules can be loaded eventually
+- open a file from library and call reveal without having the tvp opened before
