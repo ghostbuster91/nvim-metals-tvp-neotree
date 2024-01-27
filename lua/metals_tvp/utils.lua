@@ -99,6 +99,8 @@ M.expand_node = function(state, node, uri_chain)
                 return M.expand_children_rec(lsp_results.nodes, state, uri_chain)
             end
         end
+    else
+        return {}
     end
 end
 
@@ -155,7 +157,6 @@ M.internal_state = {
 }
 -- todo we always append, when should we remove?
 M.append_state = function(tvp_nodes)
-    vim.notify("append state " .. vim.inspect(tvp_nodes))
     local grouped_by_parent = {}
     for _, node in ipairs(tvp_nodes) do
         local group = grouped_by_parent[node.parent_id or M.root_node_id] or {}

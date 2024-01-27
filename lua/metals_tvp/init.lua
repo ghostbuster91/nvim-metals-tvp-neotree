@@ -32,8 +32,11 @@ local follow_debounced = function(args)
     end
 
     neotree_utils.debounce("document_symbols_follow", function()
-        local this_state = utils.get_state()
-        commands.reveal_in_tree(this_state, nil)
+        local state = utils.get_state()
+        if state.lsp_bufnr ~= vim.api.nvim_get_current_buf() then
+            return
+        end
+        commands.reveal_in_tree(state, nil)
     end, 120, neotree_utils.debounce_strategy.CALL_LAST_ONLY)
 end
 
@@ -46,7 +49,7 @@ M.navigate = function(state, path, path_to_reveal)
     state.metals_buffer = utils.valid_metals_buffer(state)
 
     utils.debug(state)
-    if path_to_reveal then
+    if state.tree and path_to_reveal then
         return commands.reveal_in_tree(state, nil)
     end
 
@@ -65,11 +68,59 @@ M.navigate = function(state, path, path_to_reveal)
         }, state)
     else
         if not state.tree or not renderer.window_exists(state) then
-            renderer.show_nodes({ utils.tree_to_nui(utils.create_root()) }, state)
+            utils.async_void_run(function()
+                if path_to_reveal then
+                    local reveal_result = commands.reveal_in_tree_internal(state)
+                    if reveal_result then
+                        renderer.position.set(state, reveal_result.last_uri)
+                    end
+                end
+                renderer.show_nodes({ utils.tree_to_nui(utils.create_root()) }, state, nil)
+            end)
         else
             renderer.redraw(state)
         end
     end
+end
+
+local handle_treeview_did_change = function(nodes)
+    local state = utils.get_state()
+    if not state then
+        return
+    end
+    state.metals_buffer = utils.valid_metals_buffer(state)
+    vim.notify("state loaded")
+
+    local refresh_node = function(node)
+        local children = utils.expand_node(state, node, nil)
+        utils.append_state(children)
+    end
+    local tasks = {}
+    for _, node in pairs(nodes) do
+        -- we are only interested in nodes that have uri
+        if node.nodeUri then
+            table.insert(tasks, function()
+                -- from neovim-metals:
+                -- As far as I know, the res.nodes here will never be children of eachother, so we
+                -- should be safe doing this call for the children in the same loop as the update.
+                refresh_node(node)
+            end)
+        end
+    end
+    utils.async_void_run(function()
+        if #tasks > 0 then
+            async.util.join(tasks)
+        else
+            --TODO kind of hacky
+            local err, result = lsp.tree_view_children(state.metals_buffer, nil)
+            if err then
+                log.error(err)
+                log.error("Something went wrong while requesting tvp children. More info in logs.")
+            else
+                utils.append_state(result.nodes)
+            end
+        end
+    end)
 end
 
 ---Configures the plugin, should be called before the plugin is used.
@@ -82,50 +133,7 @@ M.setup = function(config, global_config)
     manager.subscribe(SOURCE_NAME, {
         event = api.TREE_VIEW_DID_CHANGE_EVENT,
         handler = function(hargs)
-            local state = utils.get_state()
-            if not state then
-                return
-            end
-            state.metals_buffer = utils.valid_metals_buffer(state)
-            vim.notify("state load")
-
-            local refresh_node = function(node)
-                vim.notify("refresh node")
-                local children = utils.expand_node(state, node, nil)
-                utils.append_state(children)
-                -- local tree = utils.tree_to_nui(node)
-                -- renderer.show_nodes(tree.children, state, node.nodeUri)
-            end
-            local tasks = {}
-            for _, node in pairs(hargs.nodes) do
-                -- we are only interested in nodes that have uri
-                if node.nodeUri then
-                    table.insert(tasks, function()
-                        -- from neovim-metals:
-                        -- As far as I know, the res.nodes here will never be children of eachother, so we
-                        -- should be safe doing this call for the children in the same loop as the update.
-                        refresh_node(node)
-                    end)
-                end
-            end
-            utils.async_void_run(function()
-                if #tasks > 0 then
-                    vim.notify("async tasks > 0")
-                    async.util.join(tasks)
-                else
-                    vim.notify("render root")
-                    --TODO kind of hacky
-                    local err, result = lsp.tree_view_children(state.metals_buffer, nil)
-                    if err then
-                        log.error(err)
-                        log.error("Something went wrong while requesting tvp children. More info in logs.")
-                    else
-                        utils.append_state(result.nodes)
-                        -- local tree = utils.tree_to_nui(utils.create_root())
-                        -- renderer.show_nodes({ tree }, state)
-                    end
-                end
-            end)
+            handle_treeview_did_change(hargs.nodes)
         end,
     })
 

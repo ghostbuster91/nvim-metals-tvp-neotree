@@ -27,31 +27,40 @@ M.show_debug_node_info = function(state, node)
     end
 end
 
+M.reveal_in_tree_internal = function(state)
+    local err, result = lsp.tree_reveal(state.metals_buffer, state.lsp_winid)
+    if err then
+        log.error(err)
+        log.error("Something went wrong while requesting tree_reveal. More info in logs.")
+        return
+    end
+    if not result then
+        vim.notify("tree_reveal empty result")
+        return
+    end
+    local _, last_uri = next(result.uriChain)
+    utils.reverse(result.uriChain)
+
+    local head = table.remove(result.uriChain, 1)
+    local tvp_node = utils.internal_state.by_id[head]
+    if tvp_node then
+        local children = utils.expand_node(state, tvp_node, result.uriChain)
+        utils.append_state(children)
+        return { root = tvp_node, last_uri = last_uri }
+    end
+end
+
 M.reveal_in_tree = function(state, node)
     return utils.async_void_run(function()
-        local err, result = lsp.tree_reveal(state.metals_buffer, state.lsp_winid)
-        if err then
-            log.error(err)
-            log.error("Something went wrong while requesting tree_reveal. More info in logs.")
-            return
-        end
-        if not result then
-            vim.notify("tree_reveal empty result")
-            return
-        end
-        local _, last_uri = next(result.uriChain)
-        utils.reverse(result.uriChain)
-
-        local head = table.remove(result.uriChain, 1)
-        local tvp_node = utils.internal_state.by_id[head]
-        if tvp_node then
-            local nui_node = state.tree:get_node(tvp_node.nodeUri)
-            nui_node:expand()
-            local children = utils.expand_node(state, tvp_node, result.uriChain)
-            utils.append_state(children)
-            local tree = utils.tree_to_nui(tvp_node)
-            renderer.position.set(state, last_uri)
-            renderer.show_nodes(tree.children, state, tvp_node.nodeUri)
+        local reveal_result = M.reveal_in_tree_internal(state)
+        if reveal_result and state.tree then
+            local nui_node = state.tree:get_node(reveal_result.root.nodeUri)
+            if nui_node then
+                nui_node:expand()
+            end
+            renderer.position.set(state, reveal_result.last_uri)
+            local tree = utils.tree_to_nui(reveal_result.root)
+            renderer.show_nodes(tree.children, state, reveal_result.root.nodeUri)
         end
     end)
 end

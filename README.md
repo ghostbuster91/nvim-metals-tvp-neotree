@@ -1,6 +1,8 @@
 # Metals TreeViewProtocol Neotree Integration
 
-https://scalameta.org/metals/docs/integrations/tree-view-protocol/
+[tree-view protocol](https://scalameta.org/metals/docs/integrations/tree-view-protocol/)
+
+[neo-tree](https://github.com/nvim-neo-tree/neo-tree.nvim)
 
 ## Motivation
 
@@ -20,6 +22,10 @@ Supported features:
 - navigation around the tree and fetching of not-yet loaded nodes
 - reveal in tree
 - follow_cursor
+
+Other neotree benefits:
+
+- extensive ability to customize rendering
 
 Known issues:
 
@@ -69,7 +75,6 @@ metals configuration:
 ```lua
 metals_config.handlers = {
         ["metals/treeViewDidChange"] = function(_, result)
-            vim.notify("ext treeViewDidChange")
             require("metals_tvp.api").tree_view_did_change(result)
         end
     }
