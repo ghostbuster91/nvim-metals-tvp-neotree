@@ -84,18 +84,20 @@ M.async_void_run = function(wrapped)
 end
 
 M.expand_node = function(state, node, uri_chain)
-    node.collapseState = collapse_state.expanded
-    local state_children = M.internal_state.by_parent_id[node.nodeUri]
-    if state_children and #state_children > 0 then
-        return M.expand_children_rec(state_children, state, uri_chain)
-    else
-        local err, lsp_results = lsp.tree_view_children(state.metals_buffer, node.nodeUri)
-        if err then
-            log.error(err)
-            log.error("Something went wrong while requesting tvp children. More info in logs.")
-            return {}
+    if node.collapseState ~= nil then
+        node.collapseState = collapse_state.expanded
+        local state_children = M.internal_state.by_parent_id[node.nodeUri]
+        if state_children and #state_children > 0 then
+            return M.expand_children_rec(state_children, state, uri_chain)
         else
-            return M.expand_children_rec(lsp_results.nodes, state, uri_chain)
+            local err, lsp_results = lsp.tree_view_children(state.metals_buffer, node.nodeUri)
+            if err then
+                log.error(err)
+                log.error("Something went wrong while requesting tvp children. More info in logs.")
+                return {}
+            else
+                return M.expand_children_rec(lsp_results.nodes, state, uri_chain)
+            end
         end
     end
 end
@@ -153,6 +155,7 @@ M.internal_state = {
 }
 -- todo we always append, when should we remove?
 M.append_state = function(tvp_nodes)
+    vim.notify("append state " .. vim.inspect(tvp_nodes))
     local grouped_by_parent = {}
     for _, node in ipairs(tvp_nodes) do
         local group = grouped_by_parent[node.parent_id or M.root_node_id] or {}
