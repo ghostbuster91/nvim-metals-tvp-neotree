@@ -82,25 +82,40 @@ M.async_void_run = function(wrapped)
     async.run(wrapped, empty_callback)
 end
 
-M.expand_node = function(state, node)
-    local err, lsp_results = lsp.tree_view_children(state.metals_buffer, node.nodeUri)
-    if err then
-        log.error(err)
-        log.error("Something went wrong while requesting tvp children. More info in logs.")
-        return {}
+M.expand_node = function(state, node, uri_chain)
+    node.collapseState = collapse_state.expanded
+    local state_children = M.internal_state.by_parent_id[node.nodeUri]
+    if state_children and #state_children > 0 then
+        return M.expand_children_rec(state_children, state, uri_chain)
     else
-        return M.expand_children_rec(lsp_results, state)
+        local err, lsp_results = lsp.tree_view_children(state.metals_buffer, node.nodeUri)
+        if err then
+            log.error(err)
+            log.error("Something went wrong while requesting tvp children. More info in logs.")
+            return {}
+        else
+            return M.expand_children_rec(lsp_results.nodes, state, uri_chain)
+        end
     end
 end
 
-M.expand_children_rec = function(result, state)
-    local new_nodes = result.nodes
+M.expand_children_rec = function(result, state, uri_chain)
+    local follow_uri = nil
+    if uri_chain and #uri_chain > 0 then
+        follow_uri = table.remove(uri_chain, 1)
+    end
 
     local tasks = {}
-    for _, cnode in pairs(new_nodes) do
-        if cnode.collapseState == collapse_state.expanded then
+    for _, cnode in pairs(result) do
+        local should_follow = follow_uri == cnode.nodeUri
+
+        if cnode.collapseState == collapse_state.expanded or should_follow then
             table.insert(tasks, function()
-                return M.expand_node(state, cnode)
+                if should_follow then
+                    return M.expand_node(state, cnode, uri_chain)
+                else
+                    return M.expand_node(state, cnode, nil)
+                end
             end)
         end
     end
@@ -110,12 +125,12 @@ M.expand_children_rec = function(result, state)
         for _, rec_nodes in ipairs(rec_nodes_results) do
             for _, nodes in ipairs(rec_nodes) do
                 for _, node in ipairs(nodes) do
-                    table.insert(new_nodes, node)
+                    table.insert(result, node)
                 end
             end
         end
     end
-    return new_nodes
+    return result -- todo should this be a new table?
 end
 
 M.debug = function(state)
@@ -178,6 +193,13 @@ M.tree_to_nui = function(tvp_node)
     end
     nui_node.children = child_nui_node
     return nui_node
+end
+
+M.reverse = function(t)
+    for i = 1, math.floor(#t / 2) do
+        local j = #t - i + 1
+        t[i], t[j] = t[j], t[i]
+    end
 end
 
 return M

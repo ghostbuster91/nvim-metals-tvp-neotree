@@ -33,7 +33,28 @@ M.navigate = function(state, path, path_to_reveal)
 
     utils.debug(state)
     vim.notify("navigate: " .. vim.inspect(path))
-    vim.notify("navigate: " .. vim.inspect(path_to_reveal))
+    vim.notify("navigate-path-reveal: " .. vim.inspect(path_to_reveal))
+    if path_to_reveal then
+        vim.notify("reveal")
+        utils.async_void_run(function()
+            local err, result = lsp.tree_reveal(state.metals_buffer, state.lsp_winid)
+            vim.notify("reveal result " .. vim.inspect(result))
+            utils.reverse(result.uriChain)
+
+            local head = table.remove(result.uriChain, 1)
+            local tvp_node = utils.internal_state.by_id[head]
+            if tvp_node then
+                local nui_node = state.tree:get_node(tvp_node.nodeUri)
+                nui_node:expand()
+                local children = utils.expand_node(state, tvp_node, result.uriChain)
+                utils.append_state(children)
+                local tree = utils.tree_to_nui(tvp_node)
+                vim.notify("setting nodes " .. vim.inspect(tree.children))
+                renderer.show_nodes(tree.children, state, tvp_node.nodeUri)
+            end
+        end)
+        return
+    end
 
     -- if no client found, terminate
     if not state.metals_buffer then

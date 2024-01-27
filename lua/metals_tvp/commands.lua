@@ -15,7 +15,7 @@ M.refresh = neotree_utils.wrap(manager.refresh, SOURCE_NAME)
 M.redraw = neotree_utils.wrap(manager.redraw, SOURCE_NAME)
 
 M.show_debug_info = function(state, node)
-    print(vim.inspect(state.tree))
+    -- print(vim.inspect(state.tree))
     print(vim.inspect(utils.internal_state))
 end
 
@@ -62,7 +62,6 @@ local function toggle_node(state, node)
                     utils.append_state(children)
                     local tree = utils.tree_to_nui(tvp_node)
                     update_ui()
-                    vim.notify("setting nodes " .. vim.inspect(tree.children))
                     renderer.show_nodes(tree.children, state, tvp_node.nodeUri)
                 end)
             end
