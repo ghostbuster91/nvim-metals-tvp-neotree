@@ -137,12 +137,18 @@ M.internal_state = {
 }
 -- todo we always append, when should we remove?
 M.append_state = function(tvp_nodes)
+    local grouped_by_parent = {}
     for _, node in ipairs(tvp_nodes) do
-        local prev = M.internal_state.by_parent_id[node.parent_id or M.root_node_id] or {}
-        table.insert(prev, node)
-        M.internal_state.by_parent_id[node.parent_id or M.root_node_id] = prev
-        if node.nodeUri ~= nil then
-            M.internal_state.by_id[node.nodeUri] = node
+        local group = grouped_by_parent[node.parent_id or M.root_node_id] or {}
+        table.insert(group, node)
+        grouped_by_parent[node.parent_id or M.root_node_id] = group
+    end
+    for parent_id, children in pairs(grouped_by_parent) do
+        M.internal_state.by_parent_id[parent_id] = children
+        for _, node in ipairs(children) do
+            if node.nodeUri ~= nil then
+                M.internal_state.by_id[node.nodeUri] = node
+            end
         end
     end
 end

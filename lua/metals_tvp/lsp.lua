@@ -48,4 +48,40 @@ M.execute_command = function(bufnr, node)
     end)
 end
 
+M.tree_reveal = function(bufnr)
+    local async_buf_request = async.wrap(vim.lsp.buf_request, 4)
+    local params = vim.lsp.util.make_position_params()
+    local err, result = async_buf_request(bufnr, "metals/treeViewReveal", params)
+    return err, result
+end
+
+-- vim.lsp.buf_request(valid_metals_buffer(), "metals/treeViewReveal", params, function(err, result, ctx)
+--       if err then
+--         log.error_and_show(string.format("Error when executing: %s. Check the metals logs for more info.", ctx.method))
+--       elseif result then
+--         if result.viewId == metals_packages then
+--           if api.nvim_get_current_win() ~= state.tvp_tree.win_id then
+--             vim.fn.win_gotoid(state.tvp_tree.win_id)
+--           end
+--
+--           util.reverse(result.uriChain)
+--           local head = table.remove(result.uriChain, 1)
+--
+--           state.tvp_tree:tree_view_children({
+--             view_id = result.viewId,
+--             parent_uri = head,
+--             additionals = result.uriChain,
+--             expand = true,
+--             focus = true,
+--           })
+--         else
+--           log.warn_and_show(
+--             string.format("You recieved a node for a view nvim-metals doesn't support: %s", result.viewId)
+--           )
+--         end
+--       else
+--         log.warn_and_show(messages.scala_3_tree_view)
+--       end
+--     end)
+
 return M

@@ -48,23 +48,22 @@ local function toggle_node(state, node)
             lsp.tree_view_node_collapse_did_change(metals_buffer, tvp_node.nodeUri, true)
             renderer.redraw(state)
         else
-            node:expand()
-            tvp_node.collapseState = "expanded"
-            lsp.tree_view_node_collapse_did_change(metals_buffer, tvp_node.nodeUri, false)
+            local update_ui = function()
+                node:expand()
+                tvp_node.collapseState = "expanded"
+                lsp.tree_view_node_collapse_did_change(metals_buffer, tvp_node.nodeUri, false)
+            end
             if node.children and #node.children > 0 then
+                update_ui()
                 renderer.redraw(state)
             else
                 utils.async_void_run(function()
-                    local err, result = lsp.tree_view_children(metals_buffer, tvp_node.nodeUri)
-                    if err then
-                        log.error(err)
-                        log.error("Something went wrong while requesting tvp children. More info in logs.")
-                    else
-                        local children = utils.expand_children_rec(result, state)
-                        utils.append_state(children)
-                        node.children = utils.tree_to_nui(tvp_node).children
-                        renderer.show_nodes(node.children, state, tvp_node.nodeUri)
-                    end
+                    local children = utils.expand_node(state, tvp_node)
+                    utils.append_state(children)
+                    local tree = utils.tree_to_nui(tvp_node)
+                    update_ui()
+                    vim.notify("setting nodes " .. vim.inspect(tree.children))
+                    renderer.show_nodes(tree.children, state, tvp_node.nodeUri)
                 end)
             end
         end

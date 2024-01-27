@@ -25,13 +25,15 @@ local M = {
 
 ---Navigate to the given path.
 ---@param path string Path to navigate to. If empty, will navigate to the cwd.
-M.navigate = function(state, target_node)
+M.navigate = function(state, path, path_to_reveal)
     state.lsp_winid, _ = neotree_utils.get_appropriate_window(state)
     state.lsp_bufnr = vim.api.nvim_win_get_buf(state.lsp_winid)
     state.path = vim.api.nvim_buf_get_name(state.lsp_bufnr)
     state.metals_buffer = utils.valid_metals_buffer(state)
 
     utils.debug(state)
+    vim.notify("navigate: " .. vim.inspect(path))
+    vim.notify("navigate: " .. vim.inspect(path_to_reveal))
 
     -- if no client found, terminate
     if not state.metals_buffer then
@@ -76,15 +78,10 @@ M.setup = function(config, global_config)
 
             local refresh_node = function(node)
                 vim.notify("refresh node")
-                local err, result = lsp.tree_view_children(state.metals_buffer, node.nodeUri)
-                if err then
-                    log.error(err)
-                    log.error("Something went wrong while requesting tvp children. More info in logs.")
-                else
-                    local children = utils.expand_children_rec(result, state)
-                    utils.append_state(children)
-                    renderer.show_nodes(utils.tree_to_nui(node), state, node.nodeUri)
-                end
+                local children = utils.expand_node(state, node)
+                utils.append_state(children)
+                local tree = utils.tree_to_nui(node)
+                renderer.show_nodes(tree.children, state, node.nodeUri)
             end
             local tasks = {}
             for _, node in pairs(result.nodes) do
