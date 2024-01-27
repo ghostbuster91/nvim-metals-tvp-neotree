@@ -27,6 +27,35 @@ M.show_debug_node_info = function(state, node)
     end
 end
 
+M.reveal_in_tree = function(state, node)
+    return utils.async_void_run(function()
+        local err, result = lsp.tree_reveal(state.metals_buffer, state.lsp_winid)
+        if err then
+            log.error(err)
+            log.error("Something went wrong while requesting tree_reveal. More info in logs.")
+            return
+        end
+        if not result then
+            vim.notify("tree_reveal empty result")
+            return
+        end
+        local _, last_uri = next(result.uriChain)
+        utils.reverse(result.uriChain)
+
+        local head = table.remove(result.uriChain, 1)
+        local tvp_node = utils.internal_state.by_id[head]
+        if tvp_node then
+            local nui_node = state.tree:get_node(tvp_node.nodeUri)
+            nui_node:expand()
+            local children = utils.expand_node(state, tvp_node, result.uriChain)
+            utils.append_state(children)
+            local tree = utils.tree_to_nui(tvp_node)
+            renderer.position.set(state, last_uri)
+            renderer.show_nodes(tree.children, state, tvp_node.nodeUri)
+        end
+    end)
+end
+
 M.execute_node_command = function(state, node)
     node = node or state.tree:get_node()
     if node.extra.command ~= nil then

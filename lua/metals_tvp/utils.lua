@@ -4,6 +4,7 @@ local lsp = require("metals_tvp.lsp")
 local log = require("metals_tvp.logger")
 local api = vim.api
 local renderer = require("neo-tree.ui.renderer")
+local manager = require("neo-tree.sources.manager")
 
 local M = {}
 
@@ -200,6 +201,10 @@ M.reverse = function(t)
         local j = #t - i + 1
         t[i], t[j] = t[j], t[i]
     end
+end
+
+M.get_state = function()
+    return manager.get_state(M.SOURCE_NAME)
 end
 
 return M

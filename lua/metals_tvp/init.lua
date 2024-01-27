@@ -12,6 +12,7 @@ local events = require("neo-tree.events")
 local api = require("metals_tvp.api")
 local manager = require("neo-tree.sources.manager")
 local async = require("plenary.async")
+local commands = require("metals_tvp.commands")
 
 local SOURCE_NAME = utils.SOURCE_NAME
 
@@ -23,6 +24,19 @@ local M = {
     display_name = "Metals TVP",
 }
 
+---Follow the cursor with debouncing
+---@param args { afile: string }
+local follow_debounced = function(args)
+    if neotree_utils.is_real_file(args.afile) == false then
+        return
+    end
+
+    neotree_utils.debounce("document_symbols_follow", function()
+        local this_state = utils.get_state()
+        commands.reveal_in_tree(this_state, nil)
+    end, 120, neotree_utils.debounce_strategy.CALL_LAST_ONLY)
+end
+
 ---Navigate to the given path.
 ---@param path string Path to navigate to. If empty, will navigate to the cwd.
 M.navigate = function(state, path, path_to_reveal)
@@ -33,24 +47,7 @@ M.navigate = function(state, path, path_to_reveal)
 
     utils.debug(state)
     if path_to_reveal then
-        utils.async_void_run(function()
-            local err, result = lsp.tree_reveal(state.metals_buffer, state.lsp_winid)
-            local _, last_uri = next(result.uriChain)
-            utils.reverse(result.uriChain)
-
-            local head = table.remove(result.uriChain, 1)
-            local tvp_node = utils.internal_state.by_id[head]
-            if tvp_node then
-                local nui_node = state.tree:get_node(tvp_node.nodeUri)
-                nui_node:expand()
-                local children = utils.expand_node(state, tvp_node, result.uriChain)
-                utils.append_state(children)
-                local tree = utils.tree_to_nui(tvp_node)
-                renderer.position.set(state, last_uri)
-                renderer.show_nodes(tree.children, state, tvp_node.nodeUri)
-            end
-        end)
-        return
+        return commands.reveal_in_tree(state, nil)
     end
 
     -- if no client found, terminate
@@ -84,11 +81,9 @@ M.setup = function(config, global_config)
 
     manager.subscribe(SOURCE_NAME, {
         event = api.TREE_VIEW_DID_CHANGE_EVENT,
-        handler = function(result)
-            local state = manager.get_state(SOURCE_NAME)
-            vim.notify("tree view did change handler")
+        handler = function(hargs)
+            local state = utils.get_state()
             if not state then
-                vim.notify("state was null")
                 return
             end
             state.metals_buffer = utils.valid_metals_buffer(state)
@@ -96,13 +91,13 @@ M.setup = function(config, global_config)
 
             local refresh_node = function(node)
                 vim.notify("refresh node")
-                local children = utils.expand_node(state, node)
+                local children = utils.expand_node(state, node, nil)
                 utils.append_state(children)
-                local tree = utils.tree_to_nui(node)
-                renderer.show_nodes(tree.children, state, node.nodeUri)
+                -- local tree = utils.tree_to_nui(node)
+                -- renderer.show_nodes(tree.children, state, node.nodeUri)
             end
             local tasks = {}
-            for _, node in pairs(result.nodes) do
+            for _, node in pairs(hargs.nodes) do
                 -- we are only interested in nodes that have uri
                 if node.nodeUri then
                     table.insert(tasks, function()
@@ -126,13 +121,20 @@ M.setup = function(config, global_config)
                         log.error("Something went wrong while requesting tvp children. More info in logs.")
                     else
                         utils.append_state(result.nodes)
-                        local tree = utils.tree_to_nui(utils.create_root())
-                        renderer.show_nodes({ tree }, state)
+                        -- local tree = utils.tree_to_nui(utils.create_root())
+                        -- renderer.show_nodes({ tree }, state)
                     end
                 end
             end)
         end,
     })
+
+    if config.follow_cursor then
+        manager.subscribe(M.name, {
+            event = events.VIM_CURSOR_MOVED,
+            handler = follow_debounced,
+        })
+    end
 end
 
 return M
