@@ -12,6 +12,7 @@ local events = require("neo-tree.events")
 local api = require("metals_tvp.api")
 local manager = require("neo-tree.sources.manager")
 local async = require("plenary.async")
+local commands = require("metals_tvp.commands")
 
 local SOURCE_NAME = utils.SOURCE_NAME
 
@@ -23,49 +24,51 @@ local M = {
     display_name = "Metals TVP",
 }
 
-local function render_root_node(state, children)
-    local root = {
-        id = "0",
-        name = "metals tvp",
-        type = "root",
-        children = children,
-        extra = {
-            kind = {
-                icon = "",
-            },
-        },
-    }
+---Follow the cursor with debouncing
+---@param args { afile: string }
+local follow_debounced = function(args)
+    if neotree_utils.is_real_file(args.afile) == false then
+        return
+    end
 
-    renderer.show_nodes({ root }, state)
+    neotree_utils.debounce("document_symbols_follow", function()
+        local this_state = utils.get_state()
+        commands.reveal_in_tree(this_state, nil)
+    end, 120, neotree_utils.debounce_strategy.CALL_LAST_ONLY)
 end
 
 ---Navigate to the given path.
 ---@param path string Path to navigate to. If empty, will navigate to the cwd.
-M.navigate = function(state, target_node)
+M.navigate = function(state, path, path_to_reveal)
     state.lsp_winid, _ = neotree_utils.get_appropriate_window(state)
     state.lsp_bufnr = vim.api.nvim_win_get_buf(state.lsp_winid)
     state.path = vim.api.nvim_buf_get_name(state.lsp_bufnr)
     state.metals_buffer = utils.valid_metals_buffer(state)
 
-    local tree = state.tree
-    if not tree then
-        -- if no client found, terminate
-        if not state.metals_buffer then
-            local bufname = state.path
-            renderer.show_nodes({
-                {
-                    id = "0",
-                    name = "No metals client found or in-progress",
-                    path = bufname,
-                    type = "root",
-                    children = {},
-                    extra = { kind = kinds.get_kind(0), search_path = "/" },
-                },
-            }, state)
+    utils.debug(state)
+    if path_to_reveal then
+        return commands.reveal_in_tree(state, nil)
+    end
+
+    -- if no client found, terminate
+    if not state.metals_buffer then
+        local bufname = state.path
+        renderer.show_nodes({
+            {
+                id = "0",
+                name = "No metals client found or in-progress",
+                path = bufname,
+                type = "root",
+                children = {},
+                extra = { kind = kinds.get_kind(0), search_path = "/" },
+            },
+        }, state)
+    else
+        if not state.tree or not renderer.window_exists(state) then
+            renderer.show_nodes({ utils.tree_to_nui(utils.create_root()) }, state)
+        else
+            renderer.redraw(state)
         end
-    elseif not renderer.window_exists(state) then
-        renderer.acquire_window(state)
-        renderer.redraw(state)
     end
 end
 
@@ -74,33 +77,27 @@ end
 --wants to change from the defaults. May be empty to accept default values.
 M.setup = function(config, global_config)
     events.define_event(api.TREE_VIEW_DID_CHANGE_EVENT, { debounce_frequency = 0 })
+    utils.init_state()
 
     manager.subscribe(SOURCE_NAME, {
         event = api.TREE_VIEW_DID_CHANGE_EVENT,
-        handler = function(result)
-            local state = manager.get_state(SOURCE_NAME)
-            vim.notify("tree view did change handler")
+        handler = function(hargs)
+            local state = utils.get_state()
             if not state then
-                vim.notify("state was null")
                 return
             end
             state.metals_buffer = utils.valid_metals_buffer(state)
-            -- if state.tree == nil then
-            --     render_root_node(state, {})
-            --     return
-            -- end
+            vim.notify("state load")
+
             local refresh_node = function(node)
-                local err, result = lsp.tree_view_children(state.metals_buffer, node.nodeUri)
-                if err then
-                    log.error(err)
-                    log.error("Something went wrong while requesting tvp children. More info in logs.")
-                else
-                    local children = utils.fetch_recursively_expanded_nodes(result, state)
-                    renderer.show_nodes(children, state, node.nodeUri)
-                end
+                vim.notify("refresh node")
+                local children = utils.expand_node(state, node, nil)
+                utils.append_state(children)
+                -- local tree = utils.tree_to_nui(node)
+                -- renderer.show_nodes(tree.children, state, node.nodeUri)
             end
             local tasks = {}
-            for _, node in pairs(result.nodes) do
+            for _, node in pairs(hargs.nodes) do
                 -- we are only interested in nodes that have uri
                 if node.nodeUri then
                     table.insert(tasks, function()
@@ -113,24 +110,31 @@ M.setup = function(config, global_config)
             end
             utils.async_void_run(function()
                 if #tasks > 0 then
+                    vim.notify("async tasks > 0")
                     async.util.join(tasks)
                 else
+                    vim.notify("render root")
                     --TODO kind of hacky
                     local err, result = lsp.tree_view_children(state.metals_buffer, nil)
                     if err then
                         log.error(err)
                         log.error("Something went wrong while requesting tvp children. More info in logs.")
                     else
-                        local new_nodes = {}
-                        for _, node in pairs(result.nodes) do
-                            table.insert(new_nodes, utils.convert_node(node))
-                        end
-                        render_root_node(state, new_nodes)
+                        utils.append_state(result.nodes)
+                        -- local tree = utils.tree_to_nui(utils.create_root())
+                        -- renderer.show_nodes({ tree }, state)
                     end
                 end
             end)
         end,
     })
+
+    if config.follow_cursor then
+        manager.subscribe(M.name, {
+            event = events.VIM_CURSOR_MOVED,
+            handler = follow_debounced,
+        })
+    end
 end
 
 return M

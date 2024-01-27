@@ -3,6 +3,8 @@ local async = require("plenary.async")
 local lsp = require("metals_tvp.lsp")
 local log = require("metals_tvp.logger")
 local api = vim.api
+local renderer = require("neo-tree.ui.renderer")
+local manager = require("neo-tree.sources.manager")
 
 local M = {}
 
@@ -63,7 +65,9 @@ M.convert_node = function(raw_node)
     if raw_node.command ~= nil then
         node.extra.command = raw_node.command
     end
-    if raw_node.icon then
+    if raw_node.type then
+        node.type = raw_node.type
+    elseif raw_node.icon then
         node.type = "symbol"
         node.extra.kind.name = raw_node.icon
     else
@@ -79,33 +83,128 @@ M.async_void_run = function(wrapped)
     async.run(wrapped, empty_callback)
 end
 
-M.fetch_recursively_expanded_nodes = function(result, state)
-    local new_nodes = {}
-    for _, tvp_node in pairs(result.nodes) do
-        table.insert(new_nodes, M.convert_node(tvp_node))
+M.expand_node = function(state, node, uri_chain)
+    node.collapseState = collapse_state.expanded
+    local state_children = M.internal_state.by_parent_id[node.nodeUri]
+    if state_children and #state_children > 0 then
+        return M.expand_children_rec(state_children, state, uri_chain)
+    else
+        local err, lsp_results = lsp.tree_view_children(state.metals_buffer, node.nodeUri)
+        if err then
+            log.error(err)
+            log.error("Something went wrong while requesting tvp children. More info in logs.")
+            return {}
+        else
+            return M.expand_children_rec(lsp_results.nodes, state, uri_chain)
+        end
+    end
+end
+
+M.expand_children_rec = function(result, state, uri_chain)
+    local follow_uri = nil
+    if uri_chain and #uri_chain > 0 then
+        follow_uri = table.remove(uri_chain, 1)
     end
 
     local tasks = {}
-    for _, cnode in pairs(new_nodes) do
-        if cnode._is_expanded then
-            local prepared = function()
-                local err, cresult = lsp.tree_view_children(state.metals_buffer, cnode.id)
+    for _, cnode in pairs(result) do
+        local should_follow = follow_uri == cnode.nodeUri
 
-                if err then
-                    log.error(err)
-                    log.error("Something went wrong while requesting tvp children. More info in logs.")
+        if cnode.collapseState == collapse_state.expanded or should_follow then
+            table.insert(tasks, function()
+                if should_follow then
+                    return M.expand_node(state, cnode, uri_chain)
                 else
-                    cnode.children = M.fetch_recursively_expanded_nodes(cresult, state)
+                    return M.expand_node(state, cnode, nil)
                 end
-            end
-            table.insert(tasks, prepared)
+            end)
         end
     end
 
     if #tasks > 0 then
-        async.util.join(tasks)
+        local rec_nodes_results = async.util.join(tasks)
+        for _, rec_nodes in ipairs(rec_nodes_results) do
+            for _, nodes in ipairs(rec_nodes) do
+                for _, node in ipairs(nodes) do
+                    table.insert(result, node)
+                end
+            end
+        end
     end
-    return new_nodes
+    return result -- todo should this be a new table?
+end
+
+M.debug = function(state)
+    local window_exists = renderer.window_exists(state)
+    local tree_visible = renderer.tree_is_visible(state)
+    local tree_not_null = state.tree ~= nil
+
+    vim.notify([[tree state:
+    window_exists: ]] .. vim.inspect(window_exists) .. [[
+    tree_visible: ]] .. vim.inspect(tree_visible) .. [[
+    tree_not_null: ]] .. vim.inspect(tree_not_null))
+end
+
+M.root_node_id = "0"
+
+M.internal_state = {
+    by_parent_id = {},
+    by_id = {},
+}
+-- todo we always append, when should we remove?
+M.append_state = function(tvp_nodes)
+    local grouped_by_parent = {}
+    for _, node in ipairs(tvp_nodes) do
+        local group = grouped_by_parent[node.parent_id or M.root_node_id] or {}
+        table.insert(group, node)
+        grouped_by_parent[node.parent_id or M.root_node_id] = group
+    end
+    for parent_id, children in pairs(grouped_by_parent) do
+        M.internal_state.by_parent_id[parent_id] = children
+        for _, node in ipairs(children) do
+            if node.nodeUri ~= nil then
+                M.internal_state.by_id[node.nodeUri] = node
+            end
+        end
+    end
+end
+
+M.init_state = function()
+    M.internal_state.by_id[M.root_node_id] = M.create_root()
+end
+
+M.create_root = function()
+    local root = {
+        nodeUri = M.root_node_id,
+        label = "metals tvp",
+        type = "root",
+        collapseState = "expanded",
+    }
+
+    return root
+end
+
+M.tree_to_nui = function(tvp_node)
+    local nui_node = M.convert_node(tvp_node)
+    local children = M.internal_state.by_parent_id[tvp_node.nodeUri] or {}
+
+    local child_nui_node = {}
+    for _, node in ipairs(children) do
+        table.insert(child_nui_node, M.tree_to_nui(node))
+    end
+    nui_node.children = child_nui_node
+    return nui_node
+end
+
+M.reverse = function(t)
+    for i = 1, math.floor(#t / 2) do
+        local j = #t - i + 1
+        t[i], t[j] = t[j], t[i]
+    end
+end
+
+M.get_state = function()
+    return manager.get_state(M.SOURCE_NAME)
 end
 
 return M
