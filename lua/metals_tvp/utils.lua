@@ -89,7 +89,7 @@ M.fetch_recursively_expanded_nodes = function(result, state)
     for _, cnode in pairs(new_nodes) do
         if cnode.collapseState == collapse_state.expanded then
             local prepared = function()
-                local err, cresult = lsp.tree_view_children(state.metals_buffer, cnode.id)
+                local err, cresult = lsp.tree_view_children(state.metals_buffer, cnode.nodeUri)
 
                 if err then
                     log.error(err)
@@ -104,9 +104,13 @@ M.fetch_recursively_expanded_nodes = function(result, state)
     end
 
     if #tasks > 0 then
-        local rec_nodes = async.util.join(tasks)
-        for _, node in ipairs(rec_nodes) do
-            table.insert(new_nodes, node)
+        local rec_nodes_results = async.util.join(tasks)
+        for _, rec_nodes in ipairs(rec_nodes_results) do
+            for _, nodes in ipairs(rec_nodes) do
+                for _, node in ipairs(nodes) do
+                    table.insert(new_nodes, node)
+                end
+            end
         end
     end
     return new_nodes
@@ -114,7 +118,7 @@ end
 
 M.debug = function(state)
     local window_exists = renderer.window_exists(state)
-    local tree_visible  = renderer.tree_is_visible(state)
+    local tree_visible = renderer.tree_is_visible(state)
     local tree_not_null = state.tree ~= nil
 
     vim.notify([[tree state:
@@ -123,18 +127,21 @@ M.debug = function(state)
     tree_not_null: ]] .. vim.inspect(tree_not_null))
 end
 
-
 M.root_node_id = "0"
 
 M.internal_state = {
-    nodes = {},
+    by_parent_id = {},
+    by_id = {},
 }
 -- todo we always append, when should we remove?
 M.append_state = function(tvp_nodes)
     for _, node in ipairs(tvp_nodes) do
-        local prev = M.internal_state.nodes[node.parent_id or M.root_node_id] or {}
+        local prev = M.internal_state.by_parent_id[node.parent_id or M.root_node_id] or {}
         table.insert(prev, node)
-        M.internal_state.nodes[node.parent_id or M.root_node_id] = prev
+        M.internal_state.by_parent_id[node.parent_id or M.root_node_id] = prev
+        if node.nodeUri ~= nil then
+            M.internal_state.by_id[node.nodeUri] = node
+        end
     end
 end
 
@@ -143,7 +150,7 @@ M.create_root = function()
         nodeUri = M.root_node_id,
         label = "metals tvp",
         type = "root",
-        collapseState = "expanded"
+        collapseState = "expanded",
     }
 
     return root
@@ -151,7 +158,7 @@ end
 
 M.tree_to_nui = function(tvp_node)
     local nui_node = M.convert_node(tvp_node)
-    local children = M.internal_state.nodes[tvp_node.nodeUri] or {}
+    local children = M.internal_state.by_parent_id[tvp_node.nodeUri] or {}
 
     local child_nui_node = {}
     for _, node in ipairs(children) do

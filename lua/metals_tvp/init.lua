@@ -26,31 +26,32 @@ local M = {
 ---Navigate to the given path.
 ---@param path string Path to navigate to. If empty, will navigate to the cwd.
 M.navigate = function(state, target_node)
-    state.lsp_winid, _  = neotree_utils.get_appropriate_window(state)
-    state.lsp_bufnr     = vim.api.nvim_win_get_buf(state.lsp_winid)
-    state.path          = vim.api.nvim_buf_get_name(state.lsp_bufnr)
+    state.lsp_winid, _ = neotree_utils.get_appropriate_window(state)
+    state.lsp_bufnr = vim.api.nvim_win_get_buf(state.lsp_winid)
+    state.path = vim.api.nvim_buf_get_name(state.lsp_bufnr)
     state.metals_buffer = utils.valid_metals_buffer(state)
 
     utils.debug(state)
 
-    local tree = state.tree
-    if not tree then
-        -- if no client found, terminate
-        if not state.metals_buffer then
-            local bufname = state.path
-            renderer.show_nodes({
-                {
-                    id = "0",
-                    name = "No metals client found or in-progress",
-                    path = bufname,
-                    type = "root",
-                    children = {},
-                    extra = { kind = kinds.get_kind(0), search_path = "/" },
-                },
-            }, state)
-        end
+    -- if no client found, terminate
+    if not state.metals_buffer then
+        local bufname = state.path
+        renderer.show_nodes({
+            {
+                id = "0",
+                name = "No metals client found or in-progress",
+                path = bufname,
+                type = "root",
+                children = {},
+                extra = { kind = kinds.get_kind(0), search_path = "/" },
+            },
+        }, state)
     else
-        renderer.show_nodes(utils.tree_to_nui(utils.create_root()), state)
+        if not state.tree or not renderer.window_exists(state) then
+            renderer.show_nodes({ utils.tree_to_nui(utils.create_root()) }, state)
+        else
+            renderer.redraw(state)
+        end
     end
 end
 

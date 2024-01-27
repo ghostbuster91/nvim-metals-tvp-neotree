@@ -14,8 +14,17 @@ local M = {}
 M.refresh = neotree_utils.wrap(manager.refresh, SOURCE_NAME)
 M.redraw = neotree_utils.wrap(manager.redraw, SOURCE_NAME)
 
-M.show_debug_info = function(state)
+M.show_debug_info = function(state, node)
     print(vim.inspect(state.tree))
+    print(vim.inspect(utils.internal_state))
+end
+
+M.show_debug_node_info = function(state, node)
+    node = node or state.tree:get_node()
+    if node then
+        print(vim.inspect(node))
+        print(vim.inspect(utils.internal_state.by_id[node:get_id()]))
+    end
 end
 
 M.execute_node_command = function(state, node)
@@ -29,26 +38,32 @@ end
 
 local function toggle_node(state, node)
     local metals_buffer = state.metals_buffer
-    node = node or state.tree:get_node()
-    if node.extra.is_expandable then
-        if node:is_expanded() then
+    local node = node or state.tree:get_node()
+    local tvp_node = utils.internal_state.by_id[node:get_id()]
+    -- vim.notify(vim.inspect(state.tree))
+    if tvp_node.collapseState ~= nil then
+        if tvp_node.collapseState == "expanded" then
             node:collapse()
-            lsp.tree_view_node_collapse_did_change(metals_buffer, node:get_id(), true)
+            tvp_node.collapseState = "collapsed"
+            lsp.tree_view_node_collapse_did_change(metals_buffer, tvp_node.nodeUri, true)
             renderer.redraw(state)
         else
             node:expand()
-            lsp.tree_view_node_collapse_did_change(metals_buffer, node:get_id(), false)
+            tvp_node.collapseState = "expanded"
+            lsp.tree_view_node_collapse_did_change(metals_buffer, tvp_node.nodeUri, false)
             if node.children then
                 renderer.redraw(state)
             else
                 utils.async_void_run(function()
-                    local err, result = lsp.tree_view_children(metals_buffer, node:get_id())
+                    local err, result = lsp.tree_view_children(metals_buffer, tvp_node.nodeUri)
                     if err then
                         log.error(err)
                         log.error("Something went wrong while requesting tvp children. More info in logs.")
                     else
-                        node.children = utils.fetch_recursively_expanded_nodes(result, state)
-                        renderer.show_nodes(node.children, state, node:get_id())
+                        local children = utils.fetch_recursively_expanded_nodes(result, state)
+                        utils.append_state(children)
+                        node.children = utils.tree_to_nui(tvp_node).children
+                        renderer.show_nodes(node.children, state, tvp_node.nodeUri)
                     end
                 end)
             end
