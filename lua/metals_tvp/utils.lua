@@ -82,24 +82,26 @@ M.async_void_run = function(wrapped)
     async.run(wrapped, empty_callback)
 end
 
-M.fetch_recursively_expanded_nodes = function(result, state)
+M.expand_node = function(state, node)
+    local err, lsp_results = lsp.tree_view_children(state.metals_buffer, node.nodeUri)
+    if err then
+        log.error(err)
+        log.error("Something went wrong while requesting tvp children. More info in logs.")
+        return {}
+    else
+        return M.expand_children_rec(lsp_results, state)
+    end
+end
+
+M.expand_children_rec = function(result, state)
     local new_nodes = result.nodes
 
     local tasks = {}
     for _, cnode in pairs(new_nodes) do
         if cnode.collapseState == collapse_state.expanded then
-            local prepared = function()
-                local err, cresult = lsp.tree_view_children(state.metals_buffer, cnode.nodeUri)
-
-                if err then
-                    log.error(err)
-                    log.error("Something went wrong while requesting tvp children. More info in logs.")
-                    return {}
-                else
-                    return M.fetch_recursively_expanded_nodes(cresult, state)
-                end
-            end
-            table.insert(tasks, prepared)
+            table.insert(tasks, function()
+                return M.expand_node(state, cnode)
+            end)
         end
     end
 
@@ -143,6 +145,10 @@ M.append_state = function(tvp_nodes)
             M.internal_state.by_id[node.nodeUri] = node
         end
     end
+end
+
+M.init_state = function()
+    M.internal_state.by_id[M.root_node_id] = M.create_root()
 end
 
 M.create_root = function()

@@ -60,7 +60,7 @@ end
 --wants to change from the defaults. May be empty to accept default values.
 M.setup = function(config, global_config)
     events.define_event(api.TREE_VIEW_DID_CHANGE_EVENT, { debounce_frequency = 0 })
-    utils.append_state(utils.create_root())
+    utils.init_state()
 
     manager.subscribe(SOURCE_NAME, {
         event = api.TREE_VIEW_DID_CHANGE_EVENT,
@@ -81,7 +81,7 @@ M.setup = function(config, global_config)
                     log.error(err)
                     log.error("Something went wrong while requesting tvp children. More info in logs.")
                 else
-                    local children = utils.fetch_recursively_expanded_nodes(result, state)
+                    local children = utils.expand_children_rec(result, state)
                     utils.append_state(children)
                     renderer.show_nodes(utils.tree_to_nui(node), state, node.nodeUri)
                 end
