@@ -28,6 +28,8 @@ Known issues:
   Once the module was compiled, toggling it once again should work.
   This does not work on metals 1.2.0. See [#6023](https://github.com/scalameta/metals/issues/6029) for details.
 
+[Demo.webm](https://github.com/ghostbuster91/nvim-metals-tvp-neotree/releases/download/v0.1.0/Kooha-2024-01-27-20-37-52.webm)
+
 ## Getting started
 
 neotree configuration:
