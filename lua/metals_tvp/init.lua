@@ -89,7 +89,7 @@ local handle_treeview_did_change = function(nodes)
         return
     end
     state.metals_buffer = utils.valid_metals_buffer(state)
-    vim.notify("state loaded")
+    log.info("state loaded")
 
     local refresh_node = function(node)
         local children = utils.expand_node(state, node, nil)

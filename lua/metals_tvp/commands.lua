@@ -30,12 +30,11 @@ end
 M.reveal_in_tree_internal = function(state)
     local err, result = lsp.tree_reveal(state.metals_buffer, state.lsp_winid)
     if err then
-        log.error(err)
-        log.error("Something went wrong while requesting tree_reveal. More info in logs.")
+        log.error("Something went wrong while requesting tree_reveal. More info in logs.", err)
         return
     end
     if not result then
-        vim.notify("tree_reveal empty result")
+        log.info("tree_reveal empty result")
         return
     end
     local _, last_uri = next(result.uriChain)
