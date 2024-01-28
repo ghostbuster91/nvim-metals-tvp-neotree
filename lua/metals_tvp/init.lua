@@ -48,7 +48,6 @@ M.navigate = function(state, path, path_to_reveal)
     state.path = vim.api.nvim_buf_get_name(state.lsp_bufnr)
     state.metals_buffer = utils.valid_metals_buffer(state)
 
-    utils.debug(state)
     if state.tree and path_to_reveal then
         return commands.reveal_in_tree(state, nil)
     end
