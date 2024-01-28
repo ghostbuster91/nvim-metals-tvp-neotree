@@ -7,7 +7,7 @@ local utils = require("metals_tvp.utils")
 local lsp = require("metals_tvp.lsp")
 local neotree_utils = require("neo-tree.utils")
 local log = require("metals_tvp.logger")
-local kinds = require("neo-tree.sources.document_symbols.lib.kinds")
+local kinds = require("metals_tvp.kinds")
 local events = require("neo-tree.events")
 local api = require("metals_tvp.api")
 local manager = require("neo-tree.sources.manager")
@@ -62,7 +62,7 @@ M.navigate = function(state, path, path_to_reveal)
                 path = bufname,
                 type = "root",
                 children = {},
-                extra = { kind = kinds.get_kind(0), search_path = "/" },
+                extra = { kind = kinds.get_kind("root"), search_path = "/" },
             },
         }, state)
     else
@@ -117,6 +117,9 @@ local handle_treeview_did_change = function(nodes)
                 log.error("Something went wrong while requesting tvp children. More info in logs.")
             else
                 utils.append_state(result.nodes)
+                if renderer.tree_is_visible(state) then
+                    renderer.show_nodes({ utils.tree_to_nui(utils.create_root()) }, state, nil)
+                end
             end
         end
     end)

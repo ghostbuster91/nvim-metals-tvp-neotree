@@ -1,4 +1,4 @@
-local kinds = require("neo-tree.sources.document_symbols.lib.kinds")
+local kinds = require("metals_tvp.kinds")
 local async = require("plenary.async")
 local lsp = require("metals_tvp.lsp")
 local log = require("metals_tvp.logger")
@@ -60,7 +60,7 @@ M.convert_node = function(raw_node)
         node.extra.is_expandable = true
     end
     if raw_node.icon ~= nil then
-        node.extra.kind = kinds.get_kind(6) --TODO get proper kind
+        node.extra.kind = kinds.get_kind(raw_node.icon)
     end
     if raw_node.command ~= nil then
         node.extra.command = raw_node.command
