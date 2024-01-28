@@ -41,6 +41,15 @@ Known issues:
 neotree configuration:
 
 ```lua
+require("neo-tree").setup({
+        sources = { "filesystem", "git_status", "buffers", "metals_tvp" },
+        source_selector = {
+            sources = {
+              { source = "filesystem" },
+              { source = "buffers" },
+              { source = "git_status" },
+              { source = "metals_tvp" },
+        },
         metals_tvp = {
             follow_cursor = true,
             renderers = {
@@ -68,6 +77,7 @@ neotree configuration:
                 },
             }
         },
+    })
 ```
 
 metals configuration:
