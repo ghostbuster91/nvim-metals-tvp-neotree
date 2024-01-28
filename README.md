@@ -1,8 +1,6 @@
 # Metals TreeViewProtocol Neotree Integration
 
-[tree-view protocol](https://scalameta.org/metals/docs/integrations/tree-view-protocol/)
-
-[neo-tree](https://github.com/nvim-neo-tree/neo-tree.nvim)
+Additional [neo-tree](https://github.com/nvim-neo-tree/neo-tree.nvim) source that allows you to explore data from the [tree-view protocol](https://scalameta.org/metals/docs/integrations/tree-view-protocol/).
 
 ## Motivation
 
